@@ -1,6 +1,20 @@
-/**
- * 日志模块
- */
+/** 日志模块 - 支持北京时间、文件输出、多级别日志 */
+
+const BEIJING_TIMEZONE_OFFSET = 8 * 60 * 60 * 1000; // UTC+8
+
+/** 获取北京时间格式化字符串 (YYYY-MM-DD  HH:mm:ss.sss) */
+function getBeijingTimestamp(): string {
+  const now = new Date();
+  const beijingTime = new Date(now.getTime() + BEIJING_TIMEZONE_OFFSET);
+  return beijingTime.toISOString().replace('T', '  ').replace('Z', '');
+}
+
+/** 获取北京时间日期字符串 (YYYY-MM-DD) */
+function getBeijingDateString(): string {
+  const now = new Date();
+  const beijingTime = new Date(now.getTime() + BEIJING_TIMEZONE_OFFSET);
+  return beijingTime.toISOString().split('T')[0];
+}
 
 export enum LogLevel {
   DEBUG = 0,
@@ -9,7 +23,6 @@ export enum LogLevel {
   ERROR = 3,
 }
 
-// 配置
 let config = {
   level: LogLevel.INFO,
   fileEnabled: true,
@@ -18,28 +31,22 @@ let config = {
 
 let logFile: Deno.FsFile | null = null;
 
-// 写入日志
 function writeLog(level: number, module: string, message: string): void {
-  // 控制台输出（简洁格式，让 Docker 添加时间戳）
+  // 控制台输出
   if (level >= config.level) {
     const prefix = level >= LogLevel.WARN ? "[WARN] " : "";
     console.log(`${prefix}[${module}] ${message}`);
   }
 
-  // 文件输出（带时间戳）
   if (config.fileEnabled && logFile) {
     try {
-      const timestamp = new Date().toISOString();
+      const timestamp = getBeijingTimestamp();
       const levelName = ["DEBUG", "INFO", "WARN", "ERROR"][level] || "INFO";
       const line = `[${timestamp}] [${levelName}] [${module}] ${message}\n`;
       logFile.writeSync(new TextEncoder().encode(line));
-    } catch {
-      // 忽略写入错误
-    }
+    } catch { /* 忽略写入错误 */ }
   }
 }
-
-// ================= 公开 API =================
 
 export function debug(module: string, message: string): void {
   writeLog(LogLevel.DEBUG, module, message);
@@ -72,17 +79,15 @@ export function configureLogger(opts: Partial<typeof config>): void {
 export async function initLogger(): Promise<void> {
   try {
     await Deno.mkdir(config.logDir, { recursive: true });
-  } catch {
-    // 目录可能已存在
-  }
+  } catch { /* 目录可能已存在 */ }
 
-  const logPath = `${config.logDir}/${new Date().toISOString().split("T")[0]}.log`;
+  const logPath = `${config.logDir}/${getBeijingDateString()}.log`;
   
   try {
     logFile = await Deno.open(logPath, { create: true, append: true });
     const encoder = new TextEncoder();
     const sep = "\n" + "=".repeat(50) + "\n";
-    logFile.writeSync(encoder.encode(`${sep}[${new Date().toISOString()}] 启动${sep}`));
+    logFile.writeSync(encoder.encode(`${sep}[${getBeijingTimestamp()}] 启动${sep}`));
   } catch {
     config.fileEnabled = false;
   }
@@ -93,11 +98,9 @@ export function closeLogger(): void {
     try {
       const encoder = new TextEncoder();
       const sep = "\n" + "=".repeat(50) + "\n";
-      logFile.writeSync(encoder.encode(`${sep}[${new Date().toISOString()}] 关闭${sep}`));
+      logFile.writeSync(encoder.encode(`${sep}[${getBeijingTimestamp()}] 关闭${sep}`));
       logFile.close();
-    } catch {
-      // 忽略关闭错误
-    }
+    } catch { /* 忽略关闭错误 */ }
     logFile = null;
   }
 }
@@ -133,18 +136,12 @@ export function logApiCallEnd(provider: string, op: string, success: boolean, du
   writeLog(success ? LogLevel.INFO : LogLevel.ERROR, provider, `API ${op} ${status} (${duration}ms)`);
 }
 
-// ================= 图片生成日志增强 =================
-
-/**
- * 记录图片生成的完整 Prompt（完整版本）
- */
+/** 记录完整 Prompt */
 export function logFullPrompt(provider: string, requestId: string, prompt: string): void {
   writeLog(LogLevel.INFO, provider, `\n🤖 完整 Prompt (${requestId}):\n${"=".repeat(60)}\n${prompt}\n${"=".repeat(60)}`);
 }
 
-/**
- * 记录输入图片信息
- */
+/** 记录输入图片 */
 export function logInputImages(provider: string, requestId: string, images: string[]): void {
   if (images.length > 0) {
     const imageList = images.map((url, i) => `  ${i + 1}. ${url}`).join("\n");
@@ -152,16 +149,12 @@ export function logInputImages(provider: string, requestId: string, images: stri
   }
 }
 
-/**
- * 记录图片生成开始（包含完整参数）
- */
+/** 记录图片生成开始 */
 export function logImageGenerationStart(provider: string, requestId: string, model: string, size: string, promptLength: number): void {
   writeLog(LogLevel.INFO, provider, `\n🎨 开始生成图片 (${requestId}):\n  模型: ${model}\n  尺寸: ${size}\n  Prompt长度: ${promptLength} 字符`);
 }
 
-/**
- * 记录生成的图片 URL（完整版本）
- */
+/** 记录生成的图片 */
 export function logGeneratedImages(provider: string, requestId: string, images: { url?: string; b64_json?: string }[]): void {
   if (images.length > 0) {
     const imageUrls = images.map((img, i) => {
@@ -177,16 +170,12 @@ export function logGeneratedImages(provider: string, requestId: string, images: 
   }
 }
 
-/**
- * 记录图片生成完成（汇总信息）
- */
+/** 记录图片生成完成 */
 export function logImageGenerationComplete(provider: string, requestId: string, count: number, duration: number): void {
   writeLog(LogLevel.INFO, provider, `✅ 图片生成完成 (${requestId}): ${count} 张图片, 耗时 ${(duration / 1000).toFixed(2)}s`);
 }
 
-/**
- * 记录图片生成失败
- */
+/** 记录图片生成失败 */
 export function logImageGenerationFailed(provider: string, requestId: string, error: string): void {
   writeLog(LogLevel.ERROR, provider, `❌ 图片生成失败 (${requestId}): ${error}`);
 }

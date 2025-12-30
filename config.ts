@@ -103,28 +103,39 @@ export const ModelScopeConfig: ModelScopeProviderConfig = {
   ],
 };
 
+// Hugging Face 多 URL 配置接口（支持故障转移，区分文生图和图生图）
+export interface HuggingFaceProviderConfigExtended {
+  apiUrls: string[];           // 文生图 URL 资源池
+  editApiUrls: string[];       // 图生图/融合生图 URL 资源池
+  defaultModel: string;        // 文生图默认模型
+  defaultEditModel: string;    // 图生图默认模型
+  defaultSize: string;         // 文生图默认尺寸
+  defaultEditSize: string;     // 图生图默认尺寸
+  supportedModels: string[];   // 文生图支持的模型
+  editModels: string[];        // 图生图支持的模型
+}
+
 // Hugging Face 配置 (使用 HF Spaces Gradio API，支持多 URL 故障转移)
-export const HuggingFaceConfig: HuggingFaceProviderConfig = {
-  // URL 资源池：当一个失败时自动切换到下一个
+export const HuggingFaceConfig: HuggingFaceProviderConfigExtended = {
+  // 文生图 URL 资源池：当一个失败时自动切换到下一个
   apiUrls: [
     "https://luca115-z-image-turbo.hf.space",
-    "https://mcp-tools-z-image-turbo.hf.space",
-    "https://cpuai-z-image-turbo.hf.space",
-    "https://victor-z-image-turbo-mcp.hf.space",
-    "https://wavespeed-z-image-turbo.hf.space",
-    "https://jinguotianxin-z-image-turbo.hf.space",
-    "https://prithivmlmods-z-image-turbo-lora-dlc.hf.space",
     "https://linoyts-z-image-portrait.hf.space",
     "https://prokofyev8-z-image-portrait.hf.space",
-    "https://ovi054-z-image-lora.hf.space",
     "https://yingzhac-z-image-nsfw.hf.space",
-    "https://nymbo-tools.hf.space",
   ],
-  defaultModel: "Qwen-Image-Edit-2511",
-  defaultSize: "2048x2048",      // 文生图默认尺寸
-  defaultEditSize: "2048x2048",  // 图生图默认尺寸（暂不支持）
+  // 图生图/融合生图 URL 资源池（Qwen-Image-Edit-2511）
+  editApiUrls: [
+    "https://lenml-qwen-image-edit-2511-fast.hf.space",
+  ],
+  defaultModel: "z-image-turbo",              // 文生图默认模型
+  defaultEditModel: "Qwen-Image-Edit-2511",   // 图生图默认模型
+  defaultSize: "1024x1024",                   // 文生图默认尺寸（HF Spaces 免费版限制）
+  defaultEditSize: "1024x1024",               // 图生图默认尺寸（HF Spaces 免费版限制）
   supportedModels: [
     "z-image-turbo",
+  ],
+  editModels: [
     "Qwen-Image-Edit-2511",
   ],
 };

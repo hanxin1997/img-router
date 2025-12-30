@@ -27,9 +27,6 @@ docker-compose.override.yml
 node_modules/
 npm-debug.log*
 
-# Deno（如果未来添加）
-deno.lock
-
 # Docker
 *.pid
 *.seed

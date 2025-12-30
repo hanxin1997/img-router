@@ -1,15 +1,13 @@
 services:
-  # 智能图像生成路由服务
   img-router:
     build: .
     image: img-router:latest
     container_name: img-router-proxy
     ports:
-      - "10001:10001"  # 主机 10001 端口 -> 容器 10001 端口
+      - "10001:10001"
     environment:
-      - PORT=10001  # 服务端口（默认 10001）
-    restart: always  # 容器退出时自动重启
-    # 健康检查（确保服务正常运行）
+      - PORT=10001
+    restart: always
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:10001/health"]
       interval: 30s
@@ -17,9 +15,8 @@ services:
       retries: 3
       start_period: 15s
     volumes:
-      - ./data:/app/data  # 应用数据本地化存储（日志在 ./data/logs）
+      - ./data:/app/data
 
-# 声明网络（Docker Compose 会自动创建）
 networks:
   default:
     driver: bridge
