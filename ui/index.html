@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ImgRouter - 控制面板</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- 登录页面 -->
+  <div class="login-overlay" id="loginOverlay" style="display: none;">
+    <div class="login-card">
+      <div class="login-header">
+        <span class="material-icons login-icon">image</span>
+        <h1>ImgRouter</h1>
+        <p>智能图像生成网关</p>
+      </div>
+      <div class="login-body">
+        <div class="form-group">
+          <label for="loginToken">访问密钥</label>
+          <div class="input-with-icon">
+            <span class="material-icons">lock</span>
+            <input type="password" id="loginToken" placeholder="请输入访问密钥" class="form-input">
+            <button type="button" class="icon-btn" id="toggleLoginToken" title="显示/隐藏">
+              <span class="material-icons">visibility</span>
+            </button>
+          </div>
+        </div>
+        <div class="login-error" id="loginError" style="display: none;">
+          <span class="material-icons">error</span>
+          <span id="loginErrorText">访问密钥错误</span>
+        </div>
+        <button class="btn btn-primary btn-full" id="loginBtn">
+          <span class="material-icons">login</span>
+          登录
+        </button>
+      </div>
+      <div class="login-footer">
+        <span>ImgRouter v1.7.0</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-container" id="appContainer">
+    <!-- 侧边栏导航 -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <span class="material-icons">image</span>
+          <span class="logo-text">ImgRouter</span>
+        </div>
+        <button class="menu-toggle" id="menuToggle">
+          <span class="material-icons">menu</span>
+        </button>
+      </div>
+      <nav class="nav-menu">
+        <a href="#" class="nav-item active" data-page="dashboard">
+          <span class="material-icons">dashboard</span>
+          <span class="nav-text">仪表盘</span>
+        </a>
+        <a href="#" class="nav-item" data-page="api-keys">
+          <span class="material-icons">vpn_key</span>
+          <span class="nav-text">API 密钥</span>
+        </a>
+        <a href="#" class="nav-item" data-page="models">
+          <span class="material-icons">tune</span>
+          <span class="nav-text">模型配置</span>
+        </a>
+        <a href="#" class="nav-item" data-page="settings">
+          <span class="material-icons">settings</span>
+          <span class="nav-text">系统设置</span>
+        </a>
+        <a href="#" class="nav-item" data-page="logs">
+          <span class="material-icons">article</span>
+          <span class="nav-text">日志查看</span>
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="version-info">v1.7.0</div>
+      </div>
+    </aside>
+
+    <!-- 主内容区 -->
+    <main class="main-content">
+      <!-- 顶部栏 -->
+      <header class="top-bar">
+        <button class="mobile-menu-btn" id="mobileMenuBtn">
+          <span class="material-icons">menu</span>
+        </button>
+        <h1 class="page-title" id="pageTitle">仪表盘</h1>
+        <div class="top-bar-actions">
+          <button class="icon-btn" id="logoutBtn" title="退出登录" style="display: none;">
+            <span class="material-icons">logout</span>
+          </button>
+          <button class="icon-btn" id="themeToggle" title="切换主题">
+            <span class="material-icons">dark_mode</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- 页面内容 -->
+      <div class="page-content">
+        <!-- 仪表盘页面 -->
+        <section class="page active" id="page-dashboard">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-icon" style="background: var(--md-primary-container);">
+                <span class="material-icons">vpn_key</span>
+              </div>
+              <div class="stat-info">
+                <span class="stat-value" id="totalKeys">0</span>
+                <span class="stat-label">API 密钥</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="background: var(--md-secondary-container);">
+                <span class="material-icons">check_circle</span>
+              </div>
+              <div class="stat-info">
+                <span class="stat-value" id="activeKeys">0</span>
+                <span class="stat-label">活跃密钥</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="background: var(--md-tertiary-container);">
+                <span class="material-icons">block</span>
+              </div>
+              <div class="stat-info">
+                <span class="stat-value" id="bannedKeys">0</span>
+                <span class="stat-label">封禁密钥</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="background: var(--md-error-container);">
+                <span class="material-icons">category</span>
+              </div>
+              <div class="stat-info">
+                <span class="stat-value" id="totalProviders">4</span>
+                <span class="stat-label">支持渠道</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h2>渠道状态</h2>
+            </div>
+            <div class="card-body">
+              <div class="provider-list">
+                <div class="provider-item">
+                  <div class="provider-info">
+                    <span class="provider-name">火山引擎 (VolcEngine)</span>
+                    <span class="provider-desc">豆包 AI 绘图</span>
+                  </div>
+                  <span class="status-badge status-active">在线</span>
+                </div>
+                <div class="provider-item">
+                  <div class="provider-info">
+                    <span class="provider-name">Gitee (模力方舟)</span>
+                    <span class="provider-desc">文生图 / 图片编辑</span>
+                  </div>
+                  <span class="status-badge status-active">在线</span>
+                </div>
+                <div class="provider-item">
+                  <div class="provider-info">
+                    <span class="provider-name">ModelScope (魔搭)</span>
+                    <span class="provider-desc">通义千问绘图</span>
+                  </div>
+                  <span class="status-badge status-active">在线</span>
+                </div>
+                <div class="provider-item">
+                  <div class="provider-info">
+                    <span class="provider-name">HuggingFace</span>
+                    <span class="provider-desc">Gradio Spaces</span>
+                  </div>
+                  <span class="status-badge status-active">在线</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- API 密钥页面 -->
+        <section class="page" id="page-api-keys">
+          <div class="card">
+            <div class="card-header">
+              <h2>API 密钥管理</h2>
+              <button class="btn btn-primary" id="addKeyBtn">
+                <span class="material-icons">add</span>
+                添加密钥
+              </button>
+            </div>
+            <div class="card-body">
+              <div class="table-container">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>密钥名称</th>
+                      <th>渠道</th>
+                      <th>轮询次数</th>
+                      <th>已使用</th>
+                      <th>状态</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="apiKeysTable">
+                    <!-- 动态内容 -->
+                  </tbody>
+                </table>
+              </div>
+              <div class="empty-state" id="emptyKeysState">
+                <span class="material-icons">vpn_key</span>
+                <p>暂无 API 密钥</p>
+                <button class="btn btn-primary" id="addKeyBtn2">添加第一个密钥</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 模型配置页面 -->
+        <section class="page" id="page-models">
+          <div class="card">
+            <div class="card-header">
+              <h2>模型配置</h2>
+            </div>
+            <div class="card-body">
+              <div class="config-section">
+                <h3>当前使用的渠道与模型</h3>
+                <div class="form-group">
+                  <label>选择渠道</label>
+                  <select class="form-select" id="activeProvider">
+                    <option value="auto">自动识别 (根据 Key 格式)</option>
+                    <option value="VolcEngine">火山引擎 (VolcEngine)</option>
+                    <option value="Gitee">Gitee (模力方舟)</option>
+                    <option value="ModelScope">ModelScope (魔搭)</option>
+                    <option value="HuggingFace">HuggingFace</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>选择模型</label>
+                  <select class="form-select" id="activeModel">
+                    <option value="">请先选择渠道</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="divider"></div>
+
+              <div class="config-section">
+                <h3>图片尺寸设置</h3>
+                <div class="size-configs" id="sizeConfigs">
+                  <!-- 动态生成 -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 系统设置页面 -->
+        <section class="page" id="page-settings">
+          <div class="card">
+            <div class="card-header">
+              <h2>系统设置</h2>
+            </div>
+            <div class="card-body">
+              <div class="config-section">
+                <h3>访问控制</h3>
+                <div class="form-group">
+                  <label>统一访问密钥</label>
+                  <div class="input-with-action">
+                    <input type="password" class="form-input" id="accessToken" value="" placeholder="留空则不需要验证" />
+                    <button class="icon-btn" id="toggleAccessToken" title="显示/隐藏密钥">
+                      <span class="material-icons">visibility</span>
+                    </button>
+                    <button class="icon-btn" id="generateAccessToken" title="生成随机密钥">
+                      <span class="material-icons">refresh</span>
+                    </button>
+                  </div>
+                  <span class="form-hint">设置后，所有 API 请求必须使用此密钥进行身份验证。客户端使用此密钥替代真实的上游 API Key。</span>
+                  <div class="access-token-status inactive" id="accessTokenStatus">
+                    <span class="material-icons">lock_open</span>
+                    <span id="accessTokenStatusText">未设置访问密钥，无需登录</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="divider"></div>
+
+              <div class="config-section">
+                <h3>服务配置</h3>
+                <div class="form-group">
+                  <label>API 端口</label>
+                  <input type="number" class="form-input" id="apiPort" value="5854" />
+                  <span class="form-hint">前端 API 服务端口</span>
+                </div>
+                <div class="form-group">
+                  <label>API 超时时间 (毫秒)</label>
+                  <input type="number" class="form-input" id="apiTimeout" value="300000" />
+                  <span class="form-hint">所有渠道的统一超时时间</span>
+                </div>
+              </div>
+
+              <div class="divider"></div>
+
+              <div class="config-section">
+                <h3>图片处理</h3>
+                <div class="form-group">
+                  <label class="toggle-label">
+                    <input type="checkbox" id="convertWebpToPng" checked />
+                    <span class="toggle-switch"></span>
+                    <span class="toggle-text">WebP 转换为 PNG</span>
+                  </label>
+                  <span class="form-hint">开启后，自动将 WebP 格式图片转换为 PNG 格式，提高兼容性</span>
+                </div>
+                <div class="form-group">
+                  <label class="toggle-label">
+                    <input type="checkbox" id="convertToBase64" checked />
+                    <span class="toggle-switch"></span>
+                    <span class="toggle-text">转换为 Base64</span>
+                  </label>
+                  <span class="form-hint">开启后，将生成的图片转换为 Base64 嵌入格式，确保永久保存</span>
+                </div>
+              </div>
+
+              <div class="divider"></div>
+
+              <div class="config-section">
+                <h3>图床配置</h3>
+                <div class="form-group">
+                  <label>图床地址</label>
+                  <input type="text" class="form-input" id="imageBedUrl" value="" placeholder="https://imgbed.example.com" />
+                  <span class="form-hint">图床服务的基础 URL</span>
+                </div>
+                <div class="form-group">
+                  <label>上传端点</label>
+                  <input type="text" class="form-input" id="imageBedEndpoint" value="" placeholder="/upload" />
+                  <span class="form-hint">图片上传 API 路径</span>
+                </div>
+                <div class="form-group">
+                  <label>认证码</label>
+                  <input type="password" class="form-input" id="imageBedAuth" value="" placeholder="留空则不需要认证" />
+                  <span class="form-hint">图床服务的认证密钥</span>
+                </div>
+                <div class="form-group">
+                  <label>上传目录</label>
+                  <input type="text" class="form-input" id="imageBedFolder" value="" placeholder="img-router" />
+                  <span class="form-hint">图片存储的目录名称</span>
+                </div>
+                <div class="form-group">
+                  <label>上传渠道</label>
+                  <input type="text" class="form-input" id="imageBedChannel" value="" placeholder="s3" />
+                  <span class="form-hint">存储渠道类型 (如 s3, local 等)</span>
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button class="btn btn-primary" id="saveSettings">
+                  <span class="material-icons">save</span>
+                  保存设置
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 日志查看页面 -->
+        <section class="page" id="page-logs">
+          <!-- 日志统计卡片 -->
+          <div class="stats-grid logs-stats">
+            <div class="stat-card">
+              <div class="stat-icon" style="background: var(--md-primary-container);">
+                <span class="material-icons">description</span>
+              </div>
+              <div class="stat-info">
+                <span class="stat-value" id="logFilesCount">0</span>
+                <span class="stat-label">日志文件</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="background: var(--md-secondary-container);">
+                <span class="material-icons">storage</span>
+              </div>
+              <div class="stat-info">
+                <span class="stat-value" id="logTotalSize">0 KB</span>
+                <span class="stat-label">总大小</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="background: var(--md-tertiary-container);">
+                <span class="material-icons">date_range</span>
+              </div>
+              <div class="stat-info">
+                <span class="stat-value" id="logDateRange">-</span>
+                <span class="stat-label">日期范围</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 日志文件列表 -->
+          <div class="card">
+            <div class="card-header">
+              <h2>日志文件</h2>
+              <div class="log-actions">
+                <button class="btn btn-secondary" id="refreshLogsBtn">
+                  <span class="material-icons">refresh</span>
+                  <span class="btn-text-mobile">刷新</span>
+                </button>
+                <button class="btn btn-error" id="clearLogsBtn">
+                  <span class="material-icons">delete_sweep</span>
+                  <span class="btn-text-mobile">清理日志</span>
+                </button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="log-files-list" id="logFilesList">
+                <!-- 动态生成 -->
+              </div>
+              <div class="empty-state" id="emptyLogsState" style="display: none;">
+                <span class="material-icons">article</span>
+                <p>暂无日志文件</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 日志内容查看器 -->
+          <div class="card log-viewer-card" id="logViewerCard" style="display: none;">
+            <div class="card-header">
+              <div class="log-viewer-header">
+                <button class="icon-btn" id="closeLogViewer" title="关闭">
+                  <span class="material-icons">arrow_back</span>
+                </button>
+                <h2 id="logViewerTitle">日志内容</h2>
+              </div>
+              <div class="log-viewer-actions">
+                <span class="log-lines-info" id="logLinesInfo"></span>
+                <button class="btn btn-text" id="loadMoreLogs" style="display: none;">
+                  <span class="material-icons">expand_more</span>
+                  加载更多
+                </button>
+              </div>
+            </div>
+            <div class="card-body log-viewer-body">
+              <pre class="log-content" id="logContent"></pre>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- 添加 API Key 对话框 -->
+  <div class="modal-overlay" id="addKeyModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>添加 API 密钥</h3>
+        <button class="icon-btn modal-close" id="closeAddKeyModal">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>密钥名称</label>
+          <input type="text" class="form-input" id="keyName" placeholder="例如：我的火山引擎 Key" />
+        </div>
+        <div class="form-group">
+          <label>API Key</label>
+          <input type="text" class="form-input" id="keyValue" placeholder="粘贴你的 API Key" />
+          <span class="form-hint" id="keyProviderHint">系统将根据 Key 格式自动识别渠道</span>
+        </div>
+        <div class="form-group">
+          <label>轮询次数</label>
+          <input type="number" class="form-input" id="keyRoundRobin" value="1" min="1" />
+          <span class="form-hint">每次轮询中该 Key 被使用的次数</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-text" id="cancelAddKey">取消</button>
+        <button class="btn btn-primary" id="confirmAddKey">添加</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast 通知 -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
