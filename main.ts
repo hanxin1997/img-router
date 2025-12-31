@@ -13,7 +13,13 @@ import {
 import {
   VolcEngineConfig, GiteeConfig, ModelScopeConfig, HuggingFaceConfig,
   ImageBedConfig, API_TIMEOUT_MS, PORT,
+  getDefaultModelForProvider, isModelAlias,
+  Provider as ConfigProvider,
 } from "./config.ts";
+import {
+  getNextApiKey, getModelSize, getActiveConfig, validateAccessToken,
+  getConversionSettings, getImageBedConfig, loadConfig
+} from "./ui-server.ts";
 
 type Provider = "VolcEngine" | "Gitee" | "ModelScope" | "HuggingFace" | "Unknown";
 
@@ -221,7 +227,9 @@ async function urlToBase64(url: string): Promise<{ base64: string; mimeType: str
     else if (urlLower.endsWith(".bmp")) mimeType = "image/bmp";
     else mimeType = "image/png";
   }
-  if (mimeType === "image/webp") {
+  // 根据设置决定是否转换 WebP 为 PNG
+  const conversionSettings = getConversionSettings();
+  if (mimeType === "image/webp" && conversionSettings.convertWebpToPng) {
     try {
       const pngData = await convertWebpToPng(uint8Array);
       uint8Array = new Uint8Array(pngData);
@@ -238,6 +246,9 @@ async function urlToBase64(url: string): Promise<{ base64: string; mimeType: str
 
 /** 将 Base64 图片上传到图床获取 URL */
 async function base64ToUrl(base64Data: string): Promise<string> {
+  // 获取 UI 配置的图床设置（支持动态配置）
+  const imageBedConfig = getImageBedConfig();
+
   let base64Content: string;
   let mimeType: string;
   if (base64Data.startsWith("data:image/")) {
@@ -261,16 +272,16 @@ async function base64ToUrl(base64Data: string): Promise<string> {
   const filename = `img_${Date.now()}.${ext}`;
   const formData = new FormData();
   formData.append("file", blob, filename);
-  const uploadUrl = new URL(ImageBedConfig.uploadEndpoint, ImageBedConfig.baseUrl);
-  uploadUrl.searchParams.set("uploadChannel", ImageBedConfig.uploadChannel);
-  uploadUrl.searchParams.set("uploadFolder", ImageBedConfig.uploadFolder);
+  const uploadUrl = new URL(imageBedConfig.uploadEndpoint, imageBedConfig.baseUrl);
+  uploadUrl.searchParams.set("uploadChannel", imageBedConfig.uploadChannel);
+  uploadUrl.searchParams.set("uploadFolder", imageBedConfig.uploadFolder);
   uploadUrl.searchParams.set("returnFormat", "full"); // 返回完整链接格式
-  
+
   info("ImageBed", `正在上传图片到图床: ${filename} (${Math.round(binaryData.length / 1024)}KB)`);
   const response = await fetchWithTimeout(uploadUrl.toString(), {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${ImageBedConfig.authCode}`,
+      "Authorization": `Bearer ${imageBedConfig.authCode}`,
     },
     body: formData,
   }, 60000);
@@ -282,12 +293,12 @@ async function base64ToUrl(base64Data: string): Promise<string> {
   if (!result || !Array.isArray(result) || result.length === 0 || !result[0].src) {
     throw new Error(`图床返回格式异常: ${JSON.stringify(result)}`);
   }
-  
+
   let imageUrl = result[0].src;
   if (!imageUrl.startsWith("http")) {
-    imageUrl = `${ImageBedConfig.baseUrl}${imageUrl}`;
+    imageUrl = `${imageBedConfig.baseUrl}${imageUrl}`;
   }
-  
+
   info("ImageBed", `✅ 图片上传成功: ${imageUrl}`);
   return imageUrl;
 }
@@ -318,8 +329,10 @@ async function handleVolcEngine(
     }
   }));
 
-  const model = reqBody.model && VolcEngineConfig.supportedModels.includes(reqBody.model)
-    ? reqBody.model : VolcEngineConfig.defaultModel;
+  const model = isModelAlias(reqBody.model)
+    ? getDefaultModelForProvider("VolcEngine", hasImages)
+    : (reqBody.model && VolcEngineConfig.supportedModels.includes(reqBody.model)
+      ? reqBody.model : VolcEngineConfig.defaultModel);
   const size = reqBody.size || (hasImages ? VolcEngineConfig.defaultEditSize : VolcEngineConfig.defaultSize);
 
   // 针对豆包多图融合的特殊处理：智能重写 Prompt，将口语化描述转换为明确的“图n”引用
@@ -378,10 +391,15 @@ async function handleVolcEngine(
   const imageData = data.data || [];
   logImageGenerationComplete("VolcEngine", requestId, imageData.length, duration);
 
-  // 核心改进：将生成的图片 URL 转换回 Base64，确保客户端能够永久保存图片
+  // 根据设置决定是否将 URL 转换为 Base64
+  const conversionSettings = getConversionSettings();
   const resultParts = await Promise.all(imageData.map(async (img: { url?: string; b64_json?: string }) => {
     if (img.b64_json) return `![Generated Image](data:image/png;base64,${img.b64_json})`;
     if (img.url) {
+      if (!conversionSettings.convertToBase64) {
+        info("VolcEngine", `Base64 转换已禁用，直接返回 URL`);
+        return `![Generated Image](${img.url})`;
+      }
       try {
         info("VolcEngine", `正在将生成结果 URL 转换为 Base64 以供永久保存...`);
         const { base64, mimeType } = await urlToBase64(img.url);
@@ -524,13 +542,21 @@ async function handleGitee(
           const output = statusData.output;
           const duration = Date.now() - startTime;
           let result: string;
-          
+
+          // 根据设置决定是否将 URL 转换为 Base64
+          const conversionSettings = getConversionSettings();
+
           if (output?.file_url) {
-            try {
-              const { base64, mimeType } = await urlToBase64(output.file_url);
-              result = `![Generated Image](data:${mimeType};base64,${base64})`;
-            } catch {
+            if (!conversionSettings.convertToBase64) {
+              info("Gitee", `Base64 转换已禁用，直接返回 URL`);
               result = `![Generated Image](${output.file_url})`;
+            } else {
+              try {
+                const { base64, mimeType } = await urlToBase64(output.file_url);
+                result = `![Generated Image](data:${mimeType};base64,${base64})`;
+              } catch {
+                result = `![Generated Image](${output.file_url})`;
+              }
             }
           } else if (output?.b64_json) {
             result = `![Generated Image](data:image/png;base64,${output.b64_json})`;
@@ -555,9 +581,11 @@ async function handleGitee(
       
     } else {
       // ========== 图片编辑模式（同步 API）==========
-      const model = reqBody.model && GiteeConfig.editModels.includes(reqBody.model)
-        ? reqBody.model
-        : GiteeConfig.editModels[0];
+      const model = isModelAlias(reqBody.model)
+        ? getDefaultModelForProvider("Gitee", true)
+        : (reqBody.model && GiteeConfig.editModels.includes(reqBody.model)
+          ? reqBody.model
+          : GiteeConfig.defaultEditModel);
       
       logImageGenerationStart("Gitee", requestId, model, size, prompt.length);
       info("Gitee", `使用图片编辑模式, 模型: ${model}, 图片数量: ${images.length}`);
@@ -634,9 +662,11 @@ async function handleGitee(
     
   } else {
     // 文生图模式（同步 API）
-    const model = reqBody.model && GiteeConfig.supportedModels.includes(reqBody.model)
-      ? reqBody.model
-      : GiteeConfig.defaultModel;
+    const model = isModelAlias(reqBody.model)
+      ? getDefaultModelForProvider("Gitee", false)
+      : (reqBody.model && GiteeConfig.supportedModels.includes(reqBody.model)
+        ? reqBody.model
+        : GiteeConfig.defaultModel);
     
     logImageGenerationStart("Gitee", requestId, model, size, prompt.length);
     info("Gitee", `使用文生图模式, 模型: ${model}`);
@@ -717,19 +747,23 @@ async function handleModelScope(
   // 智能选择模型
   let model: string;
   let size: string;
-  
+
   if (hasImages) {
     // 图生图/融合生图模式
-    model = reqBody.model && ModelScopeConfig.editModels.includes(reqBody.model)
-      ? reqBody.model
-      : ModelScopeConfig.defaultEditModel;
+    model = isModelAlias(reqBody.model)
+      ? getDefaultModelForProvider("ModelScope", true)
+      : (reqBody.model && ModelScopeConfig.editModels.includes(reqBody.model)
+        ? reqBody.model
+        : ModelScopeConfig.defaultEditModel);
     size = reqBody.size || ModelScopeConfig.defaultEditSize;
     info("ModelScope", `使用图生图模式, 模型: ${model}, 图片数量: ${images.length}`);
   } else {
     // 文生图模式
-    model = reqBody.model && ModelScopeConfig.supportedModels.includes(reqBody.model)
-      ? reqBody.model
-      : ModelScopeConfig.defaultModel;
+    model = isModelAlias(reqBody.model)
+      ? getDefaultModelForProvider("ModelScope", false)
+      : (reqBody.model && ModelScopeConfig.supportedModels.includes(reqBody.model)
+        ? reqBody.model
+        : ModelScopeConfig.defaultModel);
     size = reqBody.size || ModelScopeConfig.defaultSize;
     info("ModelScope", `使用文生图模式, 模型: ${model}`);
   }
@@ -857,10 +891,19 @@ async function handleModelScope(
       const imageCount = outputImageUrls.length;
       logImageGenerationComplete("ModelScope", requestId, imageCount, duration);
       
-      // 转换为 Base64 实现永久保存
+      // 根据设置决定是否将 URL 转换为 Base64
+      const conversionSettings = getConversionSettings();
       const results: string[] = [];
+
       for (const url of outputImageUrls) {
         info("ModelScope", `📎 原始图片 URL: ${url}`);
+
+        if (!conversionSettings.convertToBase64) {
+          info("ModelScope", `Base64 转换已禁用，直接返回 URL`);
+          results.push(`![Generated Image](${url})`);
+          continue;
+        }
+
         info("ModelScope", `正在下载图片并转换为 Base64...`);
         try {
           const { base64, mimeType } = await urlToBase64(url);
@@ -947,7 +990,11 @@ async function handleHuggingFace(
 
   if (hasImages) {
     // 图生图/融合生图模式
-    const model = HuggingFaceConfig.defaultEditModel;
+    const model = isModelAlias(reqBody.model)
+      ? getDefaultModelForProvider("HuggingFace", true)
+      : (reqBody.model && HuggingFaceConfig.editModels.includes(reqBody.model)
+        ? reqBody.model
+        : HuggingFaceConfig.defaultEditModel);
     const size = reqBody.size || HuggingFaceConfig.defaultEditSize;
     const [width, height] = size.split('x').map(Number);
     
@@ -1091,25 +1138,33 @@ async function handleHuggingFace(
           throw new Error("返回数据格式异常：未能从 SSE 流中提取图片 URL");
         }
 
+        // 根据设置决定是否将 URL 转换为 Base64
+        const conversionSettings = getConversionSettings();
+
         info("HuggingFace", `📎 原始图片 URL: ${imageUrl}`);
-        info("HuggingFace", `正在下载图片并转换为 Base64...`);
-        
+
         let result: string;
-        try {
-          const { base64, mimeType } = await urlToBase64(imageUrl);
-          const sizeKB = Math.round(base64.length / 1024);
-          info("HuggingFace", `✅ 图片已转换为 Base64, MIME: ${mimeType}, 大小: ${sizeKB}KB`);
-          result = `![Generated Image](data:${mimeType};base64,${base64})`;
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          warn("HuggingFace", `❌ 图片转换 Base64 失败，使用 URL: ${msg}`);
+        if (!conversionSettings.convertToBase64) {
+          info("HuggingFace", `Base64 转换已禁用，直接返回 URL`);
           result = `![Generated Image](${imageUrl})`;
+        } else {
+          info("HuggingFace", `正在下载图片并转换为 Base64...`);
+          try {
+            const { base64, mimeType } = await urlToBase64(imageUrl);
+            const sizeKB = Math.round(base64.length / 1024);
+            info("HuggingFace", `✅ 图片已转换为 Base64, MIME: ${mimeType}, 大小: ${sizeKB}KB`);
+            result = `![Generated Image](data:${mimeType};base64,${base64})`;
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            warn("HuggingFace", `❌ 图片转换 Base64 失败，使用 URL: ${msg}`);
+            result = `![Generated Image](${imageUrl})`;
+          }
         }
 
         logGeneratedImages("HuggingFace", requestId, [{ url: imageUrl }]);
         const duration = Date.now() - startTime;
         logImageGenerationComplete("HuggingFace", requestId, 1, duration);
-        
+
         info("HuggingFace", `✅ 图生图成功使用 URL: ${apiUrl}`);
         logApiCallEnd("HuggingFace", apiType, true, duration);
         return result;
@@ -1132,7 +1187,11 @@ async function handleHuggingFace(
 
   } else {
     // 文生图模式
-    const model = HuggingFaceConfig.defaultModel;
+    const model = isModelAlias(reqBody.model)
+      ? getDefaultModelForProvider("HuggingFace", false)
+      : (reqBody.model && HuggingFaceConfig.supportedModels.includes(reqBody.model)
+        ? reqBody.model
+        : HuggingFaceConfig.defaultModel);
     const size = reqBody.size || HuggingFaceConfig.defaultSize;
     const [width, height] = size.split('x').map(Number);
     const seed = Math.round(Math.random() * 2147483647);
@@ -1198,25 +1257,33 @@ async function handleHuggingFace(
           throw new Error("返回数据格式异常：未能从 SSE 流中提取图片 URL");
         }
 
+        // 根据设置决定是否将 URL 转换为 Base64
+        const conversionSettings = getConversionSettings();
+
         info("HuggingFace", `📎 原始图片 URL: ${imageUrl}`);
-        info("HuggingFace", `正在下载图片并转换为 Base64...`);
-        
+
         let result: string;
-        try {
-          const { base64, mimeType } = await urlToBase64(imageUrl);
-          const sizeKB = Math.round(base64.length / 1024);
-          info("HuggingFace", `✅ 图片已转换为 Base64, MIME: ${mimeType}, 大小: ${sizeKB}KB`);
-          result = `![Generated Image](data:${mimeType};base64,${base64})`;
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          warn("HuggingFace", `❌ 图片转换 Base64 失败，使用 URL: ${msg}`);
+        if (!conversionSettings.convertToBase64) {
+          info("HuggingFace", `Base64 转换已禁用，直接返回 URL`);
           result = `![Generated Image](${imageUrl})`;
+        } else {
+          info("HuggingFace", `正在下载图片并转换为 Base64...`);
+          try {
+            const { base64, mimeType } = await urlToBase64(imageUrl);
+            const sizeKB = Math.round(base64.length / 1024);
+            info("HuggingFace", `✅ 图片已转换为 Base64, MIME: ${mimeType}, 大小: ${sizeKB}KB`);
+            result = `![Generated Image](data:${mimeType};base64,${base64})`;
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            warn("HuggingFace", `❌ 图片转换 Base64 失败，使用 URL: ${msg}`);
+            result = `![Generated Image](${imageUrl})`;
+          }
         }
 
         logGeneratedImages("HuggingFace", requestId, [{ url: imageUrl }]);
         const duration = Date.now() - startTime;
         logImageGenerationComplete("HuggingFace", requestId, 1, duration);
-        
+
         info("HuggingFace", `✅ 文生图成功使用 URL: ${apiUrl}`);
         logApiCallEnd("HuggingFace", apiType, true, duration);
         return result;
@@ -1314,6 +1381,9 @@ async function handleChatCompletions(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const requestId = generateRequestId();
 
+  // 每次请求前重新加载配置，确保与 UI 服务器同步
+  await loadConfig();
+
   logRequestStart(req, requestId);
 
   if (url.pathname === "/" || url.pathname === "/health") {
@@ -1333,28 +1403,68 @@ async function handleChatCompletions(req: Request): Promise<Response> {
   }
 
   const authHeader = req.headers.get("Authorization");
-  const apiKey = authHeader?.replace("Bearer ", "").trim();
-  
-  if (!apiKey) {
-    warn("HTTP", "Authorization header 缺失");
-    await logRequestEnd(requestId, req.method, url.pathname, 401, 0, "missing auth");
-    return new Response(JSON.stringify({ error: "Authorization header missing" }), { 
-      status: 401, 
-      headers: { "Content-Type": "application/json" } 
-    });
+  const providedToken = authHeader?.replace("Bearer ", "").trim();
+
+  // 首先验证访问密钥（如果已配置）
+  // 访问密钥验证：如果配置了 accessToken，则请求必须使用该 token
+  // 或者请求可以使用上游渠道的真实 API Key（会被自动识别为渠道 Key）
+  if (!validateAccessToken(providedToken || null)) {
+    // 提供的 token 不是配置的 accessToken，检查是否是有效的渠道 API Key
+    const detectedProvider = providedToken ? detectProvider(providedToken) : "Unknown";
+    if (detectedProvider === "Unknown") {
+      warn("HTTP", "访问密钥验证失败");
+      await logRequestEnd(requestId, req.method, url.pathname, 401, 0, "invalid access token");
+      return new Response(JSON.stringify({ error: "Invalid access token. Please use the configured access token or a valid provider API key." }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
   }
 
-  const provider = detectProvider(apiKey);
-  if (provider === "Unknown") {
-    warn("HTTP", "API Key 格式无法识别");
-    await logRequestEnd(requestId, req.method, url.pathname, 401, 0, "invalid key");
-    return new Response(JSON.stringify({ error: "Invalid API Key format. Could not detect provider." }), { 
-      status: 401, 
-      headers: { "Content-Type": "application/json" } 
-    });
+  let apiKey = providedToken;
+  let provider: Provider = "Unknown";
+  let usingUIConfig = false;
+
+  // 获取 UI 配置
+  const activeConfig = getActiveConfig();
+
+  // 判断是否使用 UI 配置的 API Key
+  // 条件：没有提供 token、使用特殊占位符、或者提供的是配置的 accessToken
+  const isAccessToken = validateAccessToken(apiKey || null) && activeConfig.accessToken && apiKey === activeConfig.accessToken;
+  const shouldUseUIKeys = !apiKey || apiKey === "ui-managed" || apiKey === "auto" || isAccessToken;
+
+  if (shouldUseUIKeys) {
+    // 从 UI 配置获取下一个可用的 API Key
+    const configuredProvider = activeConfig.activeProvider !== 'auto' ? activeConfig.activeProvider : undefined;
+    const nextKey = getNextApiKey(configuredProvider);
+
+    if (nextKey) {
+      apiKey = nextKey.value;
+      provider = detectProvider(apiKey);
+      usingUIConfig = true;
+      info("HTTP", `使用 UI 配置的 API Key: ${nextKey.name} (${nextKey.provider})`);
+    } else {
+      warn("HTTP", "未配置可用的 API Key");
+      await logRequestEnd(requestId, req.method, url.pathname, 401, 0, "no configured keys");
+      return new Response(JSON.stringify({ error: "No API keys configured. Please add keys in the UI management panel." }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+  } else {
+    // 使用请求中提供的 API Key（已通过渠道检测验证）
+    provider = detectProvider(apiKey!);
+    if (provider === "Unknown") {
+      warn("HTTP", "API Key 格式无法识别");
+      await logRequestEnd(requestId, req.method, url.pathname, 401, 0, "invalid key");
+      return new Response(JSON.stringify({ error: "Invalid API Key format. Could not detect provider." }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
   }
 
-  info("HTTP", `路由到 ${provider}`);
+  info("HTTP", `路由到 ${provider}${usingUIConfig ? " (UI 配置)" : ""}`);
 
   try {
     const requestBody: ChatRequest = await req.json();
@@ -1363,20 +1473,31 @@ async function handleChatCompletions(req: Request): Promise<Response> {
 
     debug("Router", `提取 Prompt: ${prompt?.substring(0, 80)}... (完整长度: ${prompt?.length || 0})`);
 
+    // 如果使用 UI 配置且没有指定尺寸，则使用 UI 配置的尺寸
+    if (usingUIConfig && !requestBody.size) {
+      const hasImages = images.length > 0;
+      const sizeType = hasImages ? 'imageEdit' : 'textToImage';
+      const uiSize = getModelSize(provider, sizeType);
+      if (uiSize) {
+        requestBody.size = uiSize;
+        debug("Router", `使用 UI 配置的尺寸: ${uiSize} (${sizeType})`);
+      }
+    }
+
     let imageContent = "";
     
     switch (provider) {
       case "VolcEngine":
-        imageContent = await handleVolcEngine(apiKey, requestBody, prompt, images, requestId);
+        imageContent = await handleVolcEngine(apiKey!, requestBody, prompt, images, requestId);
         break;
       case "Gitee":
-        imageContent = await handleGitee(apiKey, requestBody, prompt, images, requestId);
+        imageContent = await handleGitee(apiKey!, requestBody, prompt, images, requestId);
         break;
       case "ModelScope":
-        imageContent = await handleModelScope(apiKey, requestBody, prompt, images, requestId);
+        imageContent = await handleModelScope(apiKey!, requestBody, prompt, images, requestId);
         break;
       case "HuggingFace":
-        imageContent = await handleHuggingFace(apiKey, requestBody, prompt, images, requestId);
+        imageContent = await handleHuggingFace(apiKey!, requestBody, prompt, images, requestId);
         break;
     }
 
@@ -1482,6 +1603,7 @@ async function getVersion(): Promise<string> {
 }
 
 await initLogger();
+await loadConfig();  // 加载 UI 配置（包括 accessToken）
 
 const logLevel = Deno.env.get("LOG_LEVEL")?.toUpperCase();
 if (logLevel && logLevel in LogLevel) {

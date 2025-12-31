@@ -152,8 +152,8 @@ export const HuggingFaceConfig: HuggingFaceProviderConfigExtended = {
   ],
   defaultModel: "z-image-turbo",              // 文生图默认模型
   defaultEditModel: "Qwen-Image-Edit-2511",   // 图生图默认模型
-  defaultSize: "1024x1024",                   // 文生图默认尺寸（HF Spaces 免费版限制）
-  defaultEditSize: "1024x1024",               // 图生图默认尺寸（HF Spaces 免费版限制）
+  defaultSize: "512x512",                   // 文生图默认尺寸（HF Spaces 免费版限制）
+  defaultEditSize: "512x512",               // 图生图默认尺寸（HF Spaces 免费版限制）
   supportedModels: [
     "z-image-turbo",
   ],
@@ -161,6 +161,46 @@ export const HuggingFaceConfig: HuggingFaceProviderConfigExtended = {
     "Qwen-Image-Edit-2511",
   ],
 };
+
+// ================= 模型别名映射 =================
+// 支持通用模型名自动映射到各渠道的具体模型（根据文生图/图生图自动切换）
+
+export type Provider = "VolcEngine" | "Gitee" | "ModelScope" | "HuggingFace" | "Unknown";
+
+// 通用模型别名列表（这些名称会触发自动模型选择）
+export const MODEL_ALIASES = [
+  "auto",
+  "gpt-image-1",
+  "dall-e-3",
+  "dall-e-2",
+  "image",
+  "img",
+];
+
+// 根据渠道和模式获取默认模型
+export function getDefaultModelForProvider(
+  provider: Provider,
+  hasImages: boolean
+): string {
+  switch (provider) {
+    case "VolcEngine":
+      return VolcEngineConfig.defaultModel; // 豆包模型同时支持文生图和图生图
+    case "Gitee":
+      return hasImages ? GiteeConfig.defaultEditModel : GiteeConfig.defaultModel;
+    case "ModelScope":
+      return hasImages ? ModelScopeConfig.defaultEditModel : ModelScopeConfig.defaultModel;
+    case "HuggingFace":
+      return hasImages ? HuggingFaceConfig.defaultEditModel : HuggingFaceConfig.defaultModel;
+    default:
+      return "auto";
+  }
+}
+
+// 检查模型是否为别名（需要自动选择）
+export function isModelAlias(model: string | undefined): boolean {
+  if (!model) return true; // 未指定模型时也需要自动选择
+  return MODEL_ALIASES.includes(model.toLowerCase());
+}
 
 // 统一超时时间：300秒（适用于所有渠道的 API 请求，给生图留足时间）
 export const API_TIMEOUT_MS = 300000;

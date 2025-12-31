@@ -1,12 +1,15 @@
 services:
-  img-router:
+  zyimg-router:
     build: .
-    image: img-router:latest
-    container_name: img-router-proxy
+    image: zyimg-router:latest
+    container_name: zyimg-router
     ports:
-      - "10001:10001"
+      - "10001:10001"  # API 服务
+      - "5854:5854"    # UI 管理界面
     environment:
       - PORT=10001
+      - UI_PORT=5854
+      - LOG_LEVEL=INFO
     restart: always
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:10001/health"]

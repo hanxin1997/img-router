@@ -179,3 +179,141 @@ export function logImageGenerationComplete(provider: string, requestId: string, 
 export function logImageGenerationFailed(provider: string, requestId: string, error: string): void {
   writeLog(LogLevel.ERROR, provider, `❌ 图片生成失败 (${requestId}): ${error}`);
 }
+
+// ==================== 日志管理功能 ====================
+
+/** 获取日志目录 */
+export function getLogDir(): string {
+  return config.logDir;
+}
+
+/** 获取所有日志文件列表 */
+export async function getLogFiles(): Promise<{ name: string; size: number; date: string }[]> {
+  const files: { name: string; size: number; date: string }[] = [];
+
+  try {
+    for await (const entry of Deno.readDir(config.logDir)) {
+      if (entry.isFile && entry.name.endsWith('.log')) {
+        const filePath = `${config.logDir}/${entry.name}`;
+        const stat = await Deno.stat(filePath);
+        files.push({
+          name: entry.name,
+          size: stat.size,
+          date: entry.name.replace('.log', '')
+        });
+      }
+    }
+  } catch {
+    // 目录不存在
+  }
+
+  // 按日期降序排序
+  files.sort((a, b) => b.date.localeCompare(a.date));
+  return files;
+}
+
+/** 读取日志文件内容 */
+export async function readLogFile(fileName: string, limit?: number, offset?: number): Promise<{
+  content: string;
+  totalLines: number;
+  hasMore: boolean;
+}> {
+  const filePath = `${config.logDir}/${fileName}`;
+
+  try {
+    const content = await Deno.readTextFile(filePath);
+    const lines = content.split('\n');
+    const totalLines = lines.length;
+
+    if (limit !== undefined && offset !== undefined) {
+      // 从尾部读取（最新的日志在最后）
+      const startIndex = Math.max(0, totalLines - offset - limit);
+      const endIndex = Math.max(0, totalLines - offset);
+      const slicedLines = lines.slice(startIndex, endIndex);
+
+      return {
+        content: slicedLines.join('\n'),
+        totalLines,
+        hasMore: startIndex > 0
+      };
+    }
+
+    return {
+      content,
+      totalLines,
+      hasMore: false
+    };
+  } catch {
+    return {
+      content: '',
+      totalLines: 0,
+      hasMore: false
+    };
+  }
+}
+
+/** 清理指定日志文件 */
+export async function deleteLogFile(fileName: string): Promise<boolean> {
+  // 安全检查：只允许删除 .log 文件
+  if (!fileName.endsWith('.log')) {
+    return false;
+  }
+
+  const filePath = `${config.logDir}/${fileName}`;
+
+  try {
+    await Deno.remove(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** 清理所有日志文件（保留今天的） */
+export async function clearAllLogs(keepToday: boolean = true): Promise<number> {
+  const todayDate = getBeijingDateString();
+  let deletedCount = 0;
+
+  try {
+    for await (const entry of Deno.readDir(config.logDir)) {
+      if (entry.isFile && entry.name.endsWith('.log')) {
+        if (keepToday && entry.name === `${todayDate}.log`) {
+          continue;
+        }
+
+        try {
+          await Deno.remove(`${config.logDir}/${entry.name}`);
+          deletedCount++;
+        } catch {
+          // 忽略删除错误
+        }
+      }
+    }
+  } catch {
+    // 目录不存在
+  }
+
+  return deletedCount;
+}
+
+/** 获取日志统计信息 */
+export async function getLogStats(): Promise<{
+  totalFiles: number;
+  totalSize: number;
+  oldestDate: string | null;
+  newestDate: string | null;
+}> {
+  const files = await getLogFiles();
+
+  let totalSize = 0;
+  for (const file of files) {
+    totalSize += file.size;
+  }
+
+  return {
+    totalFiles: files.length,
+    totalSize,
+    oldestDate: files.length > 0 ? files[files.length - 1].date : null,
+    newestDate: files.length > 0 ? files[0].date : null
+  };
+}
