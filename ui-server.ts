@@ -113,6 +113,7 @@ export function getNextApiKey(provider?: string): ApiKeyConfig | null {
     if (key.banned && key.banExpiry && now >= key.banExpiry) {
       key.banned = false;
       key.banExpiry = null;
+      info("UIServer", `API Key "${key.name}" 封禁已到期，自动解禁`);
     }
   });
 
@@ -135,6 +136,11 @@ export function getNextApiKey(provider?: string): ApiKeyConfig | null {
 
   // 检查是否需要切换到下一个 Key
   if (currentKeyUsage >= currentKey.roundRobin) {
+    // 轮询次数用完，自动封禁该 Key 24小时
+    currentKey.banned = true;
+    currentKey.banExpiry = now + 24 * 60 * 60 * 1000; // 24小时后解禁
+    info("UIServer", `API Key "${currentKey.name}" 轮询次数已用完 (${currentKey.roundRobin}次)，自动封禁24小时`);
+
     currentKeyIndex++;
     currentKeyUsage = 0;
   }
