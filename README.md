@@ -8,7 +8,7 @@
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/lianwusuoai/img-router)
 
 ## 特性
-- **可视化界面** - 可视化的界面，后端地址：服务器地址:5854
+- **可视化界面** - 可视化的界面，前端界面地址：服务器地址:5854
 - **支持多api** - 支持多api和轮询api还有次数够了自动24小时封禁和解禁功能
 - **手机电脑ui支持** - 支持手机和电脑的ui
 - **清晰日志** - ui自带日志功能。
