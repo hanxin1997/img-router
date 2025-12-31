@@ -59,8 +59,13 @@
               │  (永久有效)     │
               └─────────────────┘
 ```
-
+## ui截图
+![屏幕截图_31-12-2025_162935_192 168 3 112](https://github.com/user-attachments/assets/1e41c53a-9d42-4e58-9157-20162d9a5423)
+![屏幕截图_31-12-2025_162915_192 168 3 112](https://github.com/user-attachments/assets/f173dc6a-c82b-4a32-8b62-226df6921c47)
+![屏幕截图_31-12-2025_162847_192 168 3 112](https://github.com/user-attachments/assets/1de894fc-b75b-408f-9efd-3395577ae5c6)
+![屏幕截图_31-12-2025_162827_192 168 3 112](https://github.com/user-attachments/assets/b52542ff-60b3-4ebe-80b4-f58d3f82af03)
 ### 各渠道数据流详解
+
 
 | 渠道 | 功能 | 发送格式 | 接收格式 | 最终返回 |
 |------|------|----------|----------|----------|
