@@ -1,6 +1,6 @@
 # ImgRouter
 
-> 智能图像生成网关 — 一个 OpenAI 兼容接口，通过 chat 自动路由多平台 AI 进行绘图服务
+> 智能图像生成网关 — 一个 OpenAI 兼容接口，通过 chat 自动路由多平台 AI 进行绘图服务，感谢上游和ai。
 
 [![Deno](https://img.shields.io/badge/Deno-2.x-000000?logo=deno)](https://deno.land/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)](https://www.docker.com/)
@@ -8,7 +8,11 @@
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/lianwusuoai/img-router)
 
 ## 特性
-
+- **可视化界面** - 可视化的界面，后端地址：服务器地址:5854
+- **支持多api** - 支持多api和轮询api还有次数够了自动24小时封禁和解禁功能
+- **手机电脑ui支持** - 支持手机和电脑的ui
+- **清晰日志** - ui自带日志功能。
+- **添加统一密钥** - 可以让渠道自动轮询，而下游用独自的密钥。
 - **智能路由** - 根据 API Key 格式自动识别并分发到对应渠道
 - **多渠道支持** - 火山引擎、Gitee (模力方舟)、ModelScope (魔搭)、Hugging Face
 - **OpenAI 兼容** - 完全兼容 `/v1/chat/completions` 接口格式
@@ -81,17 +85,11 @@
 ### Docker Compose (推荐)
 
 ```bash
-git clone https://github.com/lianwusuoai/img-router.git
+git clone https://github.com/hanxin1997/img-router.git
 cd img-router
 docker-compose up -d
 ```
 
-### Docker 直接运行
-
-```bash
-docker build -t img-router .
-docker run -d --name img-router -p 10001:10001 img-router
-```
 
 ### 本地开发
 
@@ -308,6 +306,7 @@ export const API_TIMEOUT_MS = 300000;
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | `PORT` | 监听端口 | `10001` |
+| `PORT` | ui端口 | `5854` |
 | `LOG_LEVEL` | 日志级别 (DEBUG/INFO/WARN/ERROR) | `INFO` |
 
 ## 许可证
@@ -316,4 +315,4 @@ MIT License
 
 ## 贡献
 
-欢迎提交 Issue 和 Pull Request！
+欢迎分支，作者不会维护，纯ai修的，自己能用就行。
